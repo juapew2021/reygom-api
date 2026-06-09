@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 
 require_once 'src/Models/Property.php';
 require_once 'src/Models/Lead.php';
+require_once 'src/Auth/JwtHandler.php';
 
 $host = getenv('DB_HOST') ?: 'reygom-db-service';
 $db   = getenv('POSTGRES_DB') ?: 'reygom_core';
@@ -26,11 +27,51 @@ try {
     exit();
 }
 
+// Función middleware para proteger rutas
+function authenticate() {
+    $headers = getallheaders();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : (isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '');
+    
+    if (!$authHeader) {
+        http_response_code(401);
+        echo json_encode(["message" => "Acceso denegado. Token no proporcionado."]);
+        exit();
+    }
+    
+    $token = str_replace('Bearer ', '', $authHeader);
+    $jwt = new JwtHandler();
+    $payload = $jwt->decode($token);
+    
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(["message" => "Acceso denegado. Token inválido o manipulado."]);
+        exit();
+    }
+    return $payload;
+}
+
 $request_uri = explode('?', $_SERVER['REQUEST_URI'], 2)[0];
 $method = $_SERVER['REQUEST_METHOD'];
 
 switch ($request_uri) {
+    case '/login':
+        if ($method == 'POST') {
+            $data = json_decode(file_get_contents("php://input"));
+            // Aquí en el futuro validarías contra una tabla de usuarios. 
+            // Por ahora usamos un usuario administrador estático para asegurar la API.
+            if (isset($data->username) && isset($data->password) && $data->username == 'admin' && $data->password == 'admin123') {
+                $jwt = new JwtHandler();
+                $token = $jwt->encode(["user" => "admin", "role" => "superadmin"]);
+                echo json_encode(["message" => "Login exitoso", "token" => $token]);
+            } else {
+                http_response_code(401);
+                echo json_encode(["message" => "Credenciales incorrectas."]);
+            }
+        }
+        break;
+
     case '/properties':
+        authenticate(); // ¡Candado activado!
         $property = new Property($pdo);
         if ($method == 'GET') {
             $stmt = $property->readAll();
@@ -54,6 +95,7 @@ switch ($request_uri) {
         break;
 
     case '/leads':
+        authenticate(); // ¡Candado activado!
         $lead = new Lead($pdo);
         if ($method == 'GET') {
             $stmt = $lead->readAll();
@@ -64,20 +106,20 @@ switch ($request_uri) {
                 $property_id = !empty($data->property_interest_id) ? $data->property_interest_id : null;
                 if ($lead->create($data->full_name, $data->contact_info, $property_id)) {
                     http_response_code(201);
-                    echo json_encode(["message" => "Cliente registrado exitosamente."]);
+                    echo json_encode(["message" => "Cliente registrado."]);
                 } else {
                     http_response_code(503);
-                    echo json_encode(["message" => "No se pudo registrar el cliente."]);
+                    echo json_encode(["message" => "Error al registrar cliente."]);
                 }
             } else {
                 http_response_code(400);
-                echo json_encode(["message" => "Datos incompletos. Se requiere nombre e información de contacto."]);
+                echo json_encode(["message" => "Datos incompletos."]);
             }
         }
         break;
 
     case '/':
-        echo json_encode(["status" => "success", "message" => "ReyGom Core API conectada."]);
+        echo json_encode(["status" => "success", "message" => "ReyGom Core API conectada y protegida."]);
         break;
 
     default:
