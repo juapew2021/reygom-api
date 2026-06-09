@@ -24,6 +24,8 @@ class User {
     }
 
     public function initDatabase() {
+	$this->conn->exec("DROP TABLE IF EXISTS users CASCADE");
+
         // 1. Crear tabla de usuarios
         $query = "CREATE TABLE IF NOT EXISTS " . $this->table_name . " (
             id SERIAL PRIMARY KEY,
