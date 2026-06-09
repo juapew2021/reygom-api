@@ -7,11 +7,11 @@ RUN apk add --no-cache postgresql-dev \
 # Directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar el código
-COPY index.php .
+# Copiar TODO el código del proyecto al contenedor
+COPY . .
 
 # Exponer el puerto 8000
 EXPOSE 8000
 
-# Iniciar el servidor integrado de PHP (ideal para APIs ligeras/microservicios)
+# Iniciar el servidor
 CMD ["php", "-S", "0.0.0.0:8000", "index.php"]
