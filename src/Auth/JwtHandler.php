@@ -1,40 +1,121 @@
 <?php
-class JwtHandler {
-    private $secret;
 
-    public function __construct() {
-        // En producción, esto debe venir de una variable de entorno
-        $this->secret = getenv('JWT_SECRET') ?: 'ClaveSuperSeguraReyGom2026';
-    }
+declare(strict_types=1);
 
-    public function encode($payload) {
-        $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
-        $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
-        $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
-        
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $this->secret, true);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        
-        return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-    }
+class JwtHandler
+{
+    private string $secret;
 
-    public function decode($jwt) {
-        $tokenParts = explode('.', $jwt);
-        if (count($tokenParts) != 3) return false;
-        
-        $header = base64_decode($tokenParts[0]);
-        $payload = json_decode(base64_decode($tokenParts[1]));
-        $signature_provided = $tokenParts[2];
-        
-        $base64UrlHeader = $tokenParts[0];
-        $base64UrlPayload = $tokenParts[1];
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $this->secret, true);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        
-        if ($base64UrlSignature === $signature_provided) {
-            return $payload;
+    public function __construct()
+    {
+        $secret = getenv('JWT_SECRET');
+
+        if ($secret === false || trim($secret) === '') {
+            throw new RuntimeException(
+                'La variable de entorno JWT_SECRET no está configurada.'
+            );
         }
-        return false;
+
+        $this->secret = $secret;
+    }
+
+    public function encode(array $payload): string
+    {
+        $header = [
+            'typ' => 'JWT',
+            'alg' => 'HS256',
+        ];
+
+        $base64UrlHeader = $this->base64UrlEncode(
+            json_encode($header, JSON_THROW_ON_ERROR)
+        );
+
+        $base64UrlPayload = $this->base64UrlEncode(
+            json_encode($payload, JSON_THROW_ON_ERROR)
+        );
+
+        $signature = hash_hmac(
+            'sha256',
+            $base64UrlHeader . '.' . $base64UrlPayload,
+            $this->secret,
+            true
+        );
+
+        return $base64UrlHeader
+            . '.'
+            . $base64UrlPayload
+            . '.'
+            . $this->base64UrlEncode($signature);
+    }
+
+    public function decode(string $jwt): object|false
+    {
+        $tokenParts = explode('.', $jwt);
+
+        if (count($tokenParts) !== 3) {
+            return false;
+        }
+
+        [$base64UrlHeader, $base64UrlPayload, $providedSignature] = $tokenParts;
+
+        $header = json_decode(
+            $this->base64UrlDecode($base64UrlHeader),
+            true
+        );
+
+        if (
+            !is_array($header)
+            || ($header['alg'] ?? null) !== 'HS256'
+            || ($header['typ'] ?? null) !== 'JWT'
+        ) {
+            return false;
+        }
+
+        $payload = json_decode(
+            $this->base64UrlDecode($base64UrlPayload)
+        );
+
+        if (!is_object($payload)) {
+            return false;
+        }
+
+        $expectedSignature = $this->base64UrlEncode(
+            hash_hmac(
+                'sha256',
+                $base64UrlHeader . '.' . $base64UrlPayload,
+                $this->secret,
+                true
+            )
+        );
+
+        if (!hash_equals($expectedSignature, $providedSignature)) {
+            return false;
+        }
+
+        return $payload;
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(
+            strtr(base64_encode($value), '+/', '-_'),
+            '='
+        );
+    }
+
+    private function base64UrlDecode(string $value): string
+    {
+        $padding = strlen($value) % 4;
+
+        if ($padding !== 0) {
+            $value .= str_repeat('=', 4 - $padding);
+        }
+
+        $decoded = base64_decode(
+            strtr($value, '-_', '+/'),
+            true
+        );
+
+        return $decoded === false ? '' : $decoded;
     }
 }
-?>

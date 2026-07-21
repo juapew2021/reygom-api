@@ -1,0 +1,25 @@
+# Copias de seguridad
+backups/
+*.bak
+*.bak-*
+*.backup
+*.backup-*
+*.old
+
+# Archivos de prueba
+test-*.jpg
+test-*.jpeg
+test-*.png
+
+# Sistema y editores
+.DS_Store
+.idea/
+.vscode/
+
+# Variables y secretos locales
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
