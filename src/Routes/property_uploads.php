@@ -15,7 +15,8 @@ function handlePropertyUploadRoutes(
         return false;
     }
 
-    authenticate();
+    // Validar JWT
+    $currentUser = JwtMiddleware::authenticate();
 
     if ($method !== "POST") {
         http_response_code(405);

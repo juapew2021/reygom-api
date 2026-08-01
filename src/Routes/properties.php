@@ -39,23 +39,12 @@ function handlePropertyRoutes(
      |--------------------------------------------------------------------------
      */
 
-    $currentUser = authenticate();
+   // Validar JWT
+$currentUser = JwtMiddleware::authenticate();
 
-    if (
-        empty($currentUser->id)
-        || empty($currentUser->role)
-    ) {
-        http_response_code(401);
-
-        echo json_encode([
-            'message' => 'El token no contiene la información del usuario.',
-        ]);
-
-        return true;
-    }
-
-    $userId = (string) $currentUser->id;
-    $userRole = strtolower((string) $currentUser->role);
+$userId = (string) $currentUser['id'];
+$userRole = strtolower((string) $currentUser['role']);
+$organizationId = (string) $currentUser['organization_id'];
 
     $isAdmin = in_array(
         $userRole,

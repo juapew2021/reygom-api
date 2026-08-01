@@ -36,7 +36,8 @@ function handlePropertyImageRoutes($requestUri, $method, $pdo)
         return false;
     }
 
-    authenticate();
+    // Validar JWT
+    $currentUser = JwtMiddleware::authenticate();
 
     $propertyImage = new PropertyImage($pdo);
 

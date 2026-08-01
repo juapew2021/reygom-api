@@ -13,7 +13,8 @@ function handleLeadRoutes($request_uri, $method, $pdo) {
         return false;
     }
 
-    authenticate();
+    // Validar JWT
+    $currentUser = JwtMiddleware::authenticate();
 
     $lead = new Lead($pdo);
 
