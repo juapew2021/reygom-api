@@ -25,6 +25,7 @@ require_once "src/Config/database.php";
 */
 
 require_once "src/Auth/JwtHandler.php";
+require_once "src/Middleware/JwtMiddleware.php";
 require_once "src/Helpers/auth.php";
 
 /*
