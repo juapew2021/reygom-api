@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "31"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"reygom-crm","namespace":"reygom"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"reygom-crm"}},"template":{"metadata":{"labels":{"app":"reygom-crm"}},"spec":{"containers":[{"image":"localhost:32000/reygom-crm:v1","name":"reygom-crm","ports":[{"containerPort":80}]}]}}}}
+  creationTimestamp: "2026-06-09T16:52:23Z"
+  generation: 31
+  name: reygom-crm
+  namespace: reygom
+  resourceVersion: "48838485"
+  uid: f2b94cc2-dad1-4034-a720-61e9057c33b3
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: reygom-crm
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-07-12T09:55:40Z"
+      creationTimestamp: null
+      labels:
+        app: reygom-crm
+    spec:
+      containers:
+      - image: reygom-crm:v11
+        imagePullPolicy: Never
+        name: reygom-crm
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-06-09T17:09:00Z"
+    lastUpdateTime: "2026-06-09T17:09:00Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2026-06-09T17:06:45Z"
+    lastUpdateTime: "2026-07-14T17:34:08Z"
+    message: ReplicaSet "reygom-crm-9f865d55c" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 31
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
