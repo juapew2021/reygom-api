@@ -43,6 +43,9 @@ jobs:
         shell: bash
         run: docker build -t reygom-api:ci .
 
+      - name: Probar URLs de fotografías por entorno
+        run: docker run --rm -v "$PWD:/app" -w /app php:8.2-cli-alpine php tests/PropertyImageEnvironmentTest.php
+
       - name: Configurar acceso SSH
         shell: bash
         run: |
