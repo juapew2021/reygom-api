@@ -45,6 +45,8 @@ require_once "src/Models/PropertyImage.php";
 |--------------------------------------------------------------------------
 */
 
+require_once "src/Services/PropertySubmissionService.php";
+require_once "src/Routes/submissions.php";
 require_once "src/Services/PropertyReferenceGenerator.php";
 require_once "src/Services/PropertyImageService.php";
 
@@ -82,6 +84,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleSubmissionRoutes($request_uri, $method, $pdo)) { exit(); }
 
 if (handleMediaRoutes($request_uri, $method)) {
     exit();
