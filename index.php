@@ -1,6 +1,16 @@
 <?php
 
-header("Access-Control-Allow-Origin: *");
+$origin=$_SERVER['HTTP_ORIGIN']??'';
+$allowed=['https://crm-dev.reygom.com','https://crm.reygom.com','https://reygom.com','https://www.reygom.com'];
+header('Vary: Origin');
+if(in_array($origin,$allowed,true)) {
+ header('Access-Control-Allow-Origin: '.$origin);
+ header('Access-Control-Allow-Credentials: true');
+} elseif($origin!=='') {
+ $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
+ if(!str_starts_with($path,'/public')) {http_response_code(403);header('Content-Type: application/json');echo json_encode(['message'=>'Origen no autorizado.']);exit;}
+ header('Access-Control-Allow-Origin: *');
+}
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Office-Id");
@@ -27,6 +37,8 @@ require_once "src/Config/database.php";
 require_once "src/Auth/JwtHandler.php";
 require_once "src/Services/TenantAccess.php";
 require_once "src/Services/AuditTrail.php";
+require_once "src/Services/AccessGuard.php";
+require_once "src/Routes/access.php";
 require_once "src/Routes/history.php";
 require_once "src/Routes/offices.php";
 require_once "src/Middleware/JwtMiddleware.php";
@@ -88,6 +100,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleAccessRoutes($request_uri,$method,$pdo)) { exit(); }
 
 if (handleHistoryRoutes($request_uri, $method, $pdo)) { exit(); }
 

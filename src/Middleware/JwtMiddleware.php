@@ -75,6 +75,7 @@ final class JwtMiddleware
         global $pdo;
         if (AuditTrail::revoked($pdo, $token)) TenantAccess::deny(401, 'La sesión ya está cerrada.');
         $user = TenantAccess::identity($pdo, $payload, $headers);
+        AccessGuard::check($pdo,$user,$payload);
         if ($scope) TenantAccess::scope($pdo, $user);
         return $user;
     }

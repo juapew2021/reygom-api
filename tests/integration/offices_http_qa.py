@@ -6,23 +6,39 @@ def sql(query):
 admin=json.loads(sql("SELECT row_to_json(t) FROM (SELECT id,auth_version FROM users WHERE username='admin' AND role='superadmin') t;"))
 claims={'id':admin['id'],'user':'admin','role':'superadmin','organization_id':sql("SELECT organization_id FROM users WHERE id='%s';"%admin['id']),'auth_version':admin['auth_version'],'iat':int(time.time()),'exp':int(time.time())+600}
 php="chdir('/var/www/html');require 'src/Auth/JwtHandler.php';echo (new JwtHandler())->encode(json_decode(base64_decode('"+__import__('base64').b64encode(json.dumps(claims).encode()).decode()+"'),true));"
-token=subprocess.check_output(kub+['exec','reygom-history-qa-r3','--','php','-r',php],text=True).strip()
-pod=json.loads(subprocess.check_output(kub+['get','pod','reygom-history-qa-r3','-o','json']))
+token=subprocess.check_output(kub+['exec','reygom-access-qa-r3','--','php','-r',php],text=True).strip()
+pod=json.loads(subprocess.check_output(kub+['get','pod','reygom-access-qa-r3','-o','json']))
 base='http://'+pod['status']['podIP']+':8000'
 counter=0
-def request(method,path,data=None,auth=None,office=None):
- headers={'Accept':'application/json'}
+_login_cookies={}
+_token_cookies={}
+def _raw_request(method,path,data=None,auth=None,office=None):
+ headers={'Accept':'application/json','X-Real-IP':'198.51.100.50'}
  if auth:headers['Authorization']='Bearer '+auth
  if office:headers['X-Office-Id']=office
+ username=data.get('username') if path=='/login' and isinstance(data,dict) else None
+ cookie=_login_cookies.get(username) if username else _token_cookies.get(auth)
+ if cookie:headers['Cookie']=cookie
  body=None
  if data is not None:headers['Content-Type']='application/json';body=json.dumps(data).encode()
  req=urllib.request.Request(base+path,data=body,headers=headers,method=method)
- try:
-  with urllib.request.urlopen(req,timeout=12) as r:return r.status,json.loads(r.read())
- except urllib.error.HTTPError as e:
-  raw=e.read()
-  try:return e.code,json.loads(raw)
-  except ValueError:return e.code,{'message':'Non-JSON error response'}
+ try:r=urllib.request.urlopen(req,timeout=15)
+ except urllib.error.HTTPError as e:r=e
+ raw=r.read()
+ if username and r.headers.get('Set-Cookie'):_login_cookies[username]=r.headers['Set-Cookie'].split(';')[0]
+ try:result=json.loads(raw)
+ except ValueError:result={'message':'Non-JSON response'}
+ if username and r.code==200 and 'token' in result:_token_cookies[result['token']]=_login_cookies.get(username,'')
+ return r.code,result
+
+def request(method,path,data=None,auth=None,office=None):
+ code,result=_raw_request(method,path,data,auth,office)
+ if path=='/login' and code==403 and isinstance(result,dict) and result.get('code')=='ACCESS_APPROVAL_REQUIRED' and result.get('status')=='pending':
+  approved,_result=_raw_request('POST','/access/requests/'+result['request_id']+'/approve',{'duration':'1h'},token)
+  if approved!=200:raise AssertionError('QA approval through real endpoint failed')
+  code,result=_raw_request(method,path,data,auth,office)
+ return code,result
+
 def check(condition,label):
  global counter
  if not condition:raise AssertionError(label)
@@ -83,7 +99,7 @@ try:
   sql("INSERT INTO property_submissions(id,payload,email,verification_expires_at,status,verified_at,organization_id) VALUES('%s',convert_from(decode('%s','base64'),'UTF8')::jsonb,'qa@example.invalid',now()+interval '1 day','pending_review',now(),'%s');"%(sid,packed,office['id']))
   if office==b:
    code="$d='/var/www/media/submissions-private/"+sid+"';mkdir($d,0700,true);file_put_contents($d.'/verification.json',json_encode(['test_only'=>true,'verification_token'=>'qa-only-token']));"
-   subprocess.run(kub+['exec','reygom-history-qa-r3','--','php','-r',code],check=True,stdout=subprocess.DEVNULL)
+   subprocess.run(kub+['exec','reygom-access-qa-r3','--','php','-r',code],check=True,stdout=subprocess.DEVNULL)
  inbox=expect('GET','/submissions',auth=aa['token'],label='Office admin reads own submissions')
  check(submission_ids[0] in {r['id'] for r in inbox} and submission_ids[1] not in {r['id'] for r in inbox},'Submission inbox isolated')
  expect('GET','/submissions/'+submission_ids[1]+'/outbox',auth=aa['token'],status=404,label='Foreign private verification file protected')
@@ -113,6 +129,7 @@ finally:
  cleanup+='DELETE FROM property_images WHERE property_id IN ('+ids(property_ids)+');'
  cleanup+='DELETE FROM leads WHERE id IN ('+ids(lead_ids)+');'
  cleanup+='DELETE FROM properties WHERE id IN ('+ids(property_ids)+');'
+ for table in ['access_grants','access_requests','access_devices','user_access_policies']:cleanup+='DELETE FROM '+table+' WHERE user_id IN ('+ids(user_ids)+');'
  cleanup+='DELETE FROM users WHERE id IN ('+ids(user_ids)+');'
  cleanup+='DELETE FROM organizations WHERE id IN ('+ids(office_ids)+');'
  cleanup+='DELETE FROM office_audit WHERE organization_id IN ('+ids(office_ids)+');COMMIT;'

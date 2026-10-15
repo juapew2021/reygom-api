@@ -109,6 +109,7 @@ function handleAuthRoutes(
         }
 
         $identity = TenantAccess::identity($pdo, ['id'=>$userData['id'], 'auth_version'=>$userData['auth_version'] ?? 1], []);
+        $deviceId = AccessGuard::check($pdo,$identity);
         $issuedAt = time();
         $expiresAt = $issuedAt + 28800;
 
@@ -121,6 +122,7 @@ function handleAuthRoutes(
             'organization_id' =>
                 (string) $userData['organization_id'],
             'auth_version' => (int) ($userData['auth_version'] ?? 1),
+            'device_id' => $deviceId,
             'jti' => bin2hex(random_bytes(16)),
             'iat' => $issuedAt,
             'exp' => $expiresAt,

@@ -1,0 +1,28 @@
+_login_cookies={}
+_token_cookies={}
+def _raw_request(method,path,data=None,auth=None,office=None):
+ headers={'Accept':'application/json','X-Real-IP':'198.51.100.50'}
+ if auth:headers['Authorization']='Bearer '+auth
+ if office:headers['X-Office-Id']=office
+ username=data.get('username') if path=='/login' and isinstance(data,dict) else None
+ cookie=_login_cookies.get(username) if username else _token_cookies.get(auth)
+ if cookie:headers['Cookie']=cookie
+ body=None
+ if data is not None:headers['Content-Type']='application/json';body=json.dumps(data).encode()
+ req=urllib.request.Request(base+path,data=body,headers=headers,method=method)
+ try:r=urllib.request.urlopen(req,timeout=15)
+ except urllib.error.HTTPError as e:r=e
+ raw=r.read()
+ if username and r.headers.get('Set-Cookie'):_login_cookies[username]=r.headers['Set-Cookie'].split(';')[0]
+ try:result=json.loads(raw)
+ except ValueError:result={'message':'Non-JSON response'}
+ if username and r.code==200 and 'token' in result:_token_cookies[result['token']]=_login_cookies.get(username,'')
+ return r.code,result
+
+def request(method,path,data=None,auth=None,office=None):
+ code,result=_raw_request(method,path,data,auth,office)
+ if path=='/login' and code==403 and isinstance(result,dict) and result.get('code')=='ACCESS_APPROVAL_REQUIRED' and result.get('status')=='pending':
+  approved,_result=_raw_request('POST','/access/requests/'+result['request_id']+'/approve',{'duration':'1h'},token)
+  if approved!=200:raise AssertionError('QA approval through real endpoint failed')
+  code,result=_raw_request(method,path,data,auth,office)
+ return code,result
