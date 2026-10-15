@@ -11,6 +11,7 @@ final class PropertySubmissionService {
 
     public static function mode(): string {
         // A test mailbox must never substitute for real email verification in production.
+        if (getenv('SUBMISSIONS_MODE')==='mail' && class_exists('MailService') && MailService::configured() && in_array(getenv('PUBLIC_CRM_BASE_URL'), strtolower((string)getenv('APP_ENV'))==='dev'?['https://crm-dev.reygom.com']:['https://crm.reygom.com'],true)) return 'mail';
         return strtolower((string)getenv('APP_ENV')) === 'dev' && getenv('SUBMISSIONS_MODE') === 'test'
             ? 'test' : 'disabled';
     }
@@ -54,7 +55,7 @@ final class PropertySubmissionService {
     }
 
     public function submit(array $input, array $upload): array {
-        if (self::mode() !== 'test') throw new SubmissionProblem('La publicación todavía no está disponible. Falta configurar el envío de correo.',503);
+        if (self::mode() === 'disabled') throw new SubmissionProblem('La publicación todavía no está disponible. Falta configurar el envío de correo.',503);
         $data=self::validate($input);
         if (!empty($input['website'])) throw new SubmissionProblem('No se pudo enviar el anuncio.');
         $id=self::uuid(); $token=bin2hex(random_bytes(32)); $dir=$this->root.'/'.$id;
@@ -68,16 +69,28 @@ final class PropertySubmissionService {
             $this->query("INSERT INTO property_submissions (id,payload,email,verification_hash,verification_expires_at,images) VALUES (:id,:payload,:email,:hash,now()+interval '24 hours',:images)",[
                 'id'=>$id,'payload'=>json_encode($data,JSON_THROW_ON_ERROR),'email'=>$data['email'],'hash'=>hash('sha256',$token),'images'=>json_encode($images,JSON_THROW_ON_ERROR)
             ]);
-            // Private outbox for DEV; reachable only through the administrator route.
-            $mail=['to'=>$data['email'],'verification_token'=>$token,'created_at'=>gmdate('c'),'test_only'=>true];
-            if (file_put_contents($dir.'/verification.json',json_encode($mail,JSON_THROW_ON_ERROR),LOCK_EX)===false) throw new RuntimeException('Cannot write test outbox');
-            chmod($dir.'/verification.json',0600);
+            if(self::mode()==='test') {
+                $mail=['to'=>$data['email'],'verification_token'=>$token,'created_at'=>gmdate('c'),'test_only'=>true];
+                if(file_put_contents($dir.'/verification.json',json_encode($mail,JSON_THROW_ON_ERROR),LOCK_EX)===false)throw new RuntimeException('Cannot write test outbox');
+                chmod($dir.'/verification.json',0600);
+            }
             $this->db->commit();
-            return ['id'=>$id,'status'=>'awaiting_email','test_mode'=>true,'message'=>'Anuncio de prueba recibido. El enlace de verificación está en la bandeja de pruebas del equipo; no se ha enviado un correo real.'];
         } catch (Throwable $e) {
-            if ($this->db->inTransaction()) $this->db->rollBack();
-            $this->removeFiles($dir); throw $e;
+            if($this->db->inTransaction())$this->db->rollBack();
+            $this->removeFiles($dir);throw $e;
         }
+        if(self::mode()==='mail') {
+            $office=$this->query('SELECT organization_id FROM property_submissions WHERE id=?',[$id])->fetchColumn();
+            try {
+                $url=rtrim((string)getenv('PUBLIC_CRM_BASE_URL'),'/').'/publicar/verificar#token='.$token;
+                (new MailService($this->db,(string)$office))->send(['to'=>[$data['email']],'subject'=>'Verifica tu anuncio en ReyGom','text'=>"Hemos recibido tu anuncio. Confirma tu correo mediante este enlace (válido durante 24 horas):\n\n".$url."\n\nEl equipo revisará el anuncio antes de publicarlo. Si no has solicitado publicar un inmueble, ignora este mensaje."],'submission-'.$id,null,'verification');
+                return ['id'=>$id,'status'=>'awaiting_email','test_mode'=>false,'message'=>'Revisa tu correo y confirma el enlace de verificación. El enlace caduca en 24 horas.'];
+            }catch(Throwable $e){
+                error_log('Submission verification delivery uncertain');
+                return ['id'=>$id,'status'=>'awaiting_email','test_mode'=>false,'message'=>'Anuncio recibido. No hemos podido confirmar la entrega del correo; revisa tu bandeja y spam. Si no llega, contacta con el equipo. No vuelvas a enviar el anuncio.'];
+            }
+        }
+        return ['id'=>$id,'status'=>'awaiting_email','test_mode'=>true,'message'=>'Anuncio de prueba recibido. El enlace de verificación está en la bandeja de pruebas del equipo; no se ha enviado un correo real.'];
     }
 
     private function storeUploads(array $files,string $dir): array {
@@ -109,12 +122,12 @@ final class PropertySubmissionService {
     }
 
     public function verify(string $token): array {
-        if (self::mode()!=='test') throw new SubmissionProblem('Verificación no disponible.',503);
+        if (self::mode()==='disabled') throw new SubmissionProblem('Verificación no disponible.',503);
         if (!preg_match('/^[a-f0-9]{64}$/',$token)) throw new SubmissionProblem('Enlace no válido o caducado.',410);
         $id=$this->query("UPDATE property_submissions SET status='pending_review',verified_at=now(),verification_hash=NULL WHERE verification_hash=:hash AND status='awaiting_email' AND verification_expires_at>now() RETURNING id",['hash'=>hash('sha256',$token)])->fetchColumn();
         if (!$id) throw new SubmissionProblem('Enlace no válido, ya utilizado o caducado.',410);
         $f=$this->root.'/'.$id.'/verification.json'; if (is_file($f)) unlink($f);
-        return ['status'=>'pending_review','message'=>'Correo verificado en DEV. El equipo revisará el anuncio antes de publicarlo.'];
+        return ['status'=>'pending_review','message'=>'Correo verificado. El equipo revisará el anuncio antes de publicarlo.'];
     }
 
     public function list(): array {

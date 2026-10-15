@@ -18,7 +18,7 @@ function handleSubmissionRoutes(string $path,string $method,PDO $pdo): bool {
         $id=$matches[1]??''; $action=$matches[2]??'';
         if($path==='/public/submissions/config' && $method==='GET') {
             $mode=PropertySubmissionService::mode();
-            echo json_encode(['enabled'=>$mode==='test','test_mode'=>$mode==='test']);return true;
+            echo json_encode(['enabled'=>$mode!=='disabled','test_mode'=>$mode==='test']);return true;
         }
         if($path==='/public/submissions' && $method==='POST') {
             $data=$service->submit($_POST,$_FILES['images']??[]); http_response_code(202);
