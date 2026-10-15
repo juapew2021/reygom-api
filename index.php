@@ -26,6 +26,8 @@ require_once "src/Config/database.php";
 
 require_once "src/Auth/JwtHandler.php";
 require_once "src/Services/TenantAccess.php";
+require_once "src/Services/AuditTrail.php";
+require_once "src/Routes/history.php";
 require_once "src/Routes/offices.php";
 require_once "src/Middleware/JwtMiddleware.php";
 require_once "src/Helpers/auth.php";
@@ -86,6 +88,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleHistoryRoutes($request_uri, $method, $pdo)) { exit(); }
 
 if (handleOfficeRoutes($request_uri, $method, $pdo)) { exit(); }
 

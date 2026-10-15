@@ -59,6 +59,7 @@ function handleAuthRoutes(
         );
 
         if ($userData === false || $userData === null) {
+            AuditTrail::failedLogin($pdo, trim((string)$data->username));
             http_response_code(401);
 
             echo json_encode([
@@ -120,10 +121,12 @@ function handleAuthRoutes(
             'organization_id' =>
                 (string) $userData['organization_id'],
             'auth_version' => (int) ($userData['auth_version'] ?? 1),
+            'jti' => bin2hex(random_bytes(16)),
             'iat' => $issuedAt,
             'exp' => $expiresAt,
         ]);
 
+        AuditTrail::event($pdo, 'session.login', $identity);
         echo json_encode([
             'message' => 'Login exitoso.',
             'token' => $token,

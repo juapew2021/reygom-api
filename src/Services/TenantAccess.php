@@ -28,7 +28,12 @@ final class TenantAccess
             if (!$office || $office['deleted_at']) self::deny(404, 'Oficina no encontrada.');
             $user['organization_id']=$office['id']; $user['office_name']=$office['name']; $user['country_code']=$office['country_code']; $user['office_status']=$office['status'];
         }
-        if (!$user['organization_id'] || ($user['role'] !== 'superadmin' && ($user['office_status'] !== 'active' || $user['deleted_at']))) self::deny(403, 'La oficina no está activa.');
+        if (!$user['organization_id'] || ($user['role'] !== 'superadmin' && ($user['office_status'] !== 'active' || $user['deleted_at']))) {
+            if (explode('?',$_SERVER['REQUEST_URI']??'',2)[0]==='/login') AuditTrail::event($pdo,'session.login_failed',null,$user);
+            self::deny(403, 'La oficina no está activa.');
+        }
+        $context=$pdo->prepare("SELECT set_config('reygom.user_id',:id,false),set_config('reygom.organization_id',:office,false)");
+        $context->execute(['id'=>$user['id'],'office'=>$user['organization_id']]);
         unset($user['deleted_at']);
         return $user;
     }

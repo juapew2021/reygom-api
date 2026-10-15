@@ -1,13 +1,13 @@
-import subprocess,json,urllib.request,urllib.error,uuid,secrets
+import subprocess,json,urllib.request,urllib.error,uuid,secrets,time
 kub=['microk8s','kubectl','-n','reygom-dev']
 def sql(query):
  r=subprocess.run(kub+['exec','-i','deployment/reygom-db','--','sh','-lc','psql -v ON_ERROR_STOP=1 -At -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],input=query,text=True,capture_output=True,check=True)
  return r.stdout.strip()
 admin=json.loads(sql("SELECT row_to_json(t) FROM (SELECT id,auth_version FROM users WHERE username='admin' AND role='superadmin') t;"))
-claims={'id':admin['id'],'user':'admin','role':'superadmin','organization_id':sql("SELECT organization_id FROM users WHERE id='%s';"%admin['id']),'auth_version':admin['auth_version'],'iat':1,'exp':4102444800}
+claims={'id':admin['id'],'user':'admin','role':'superadmin','organization_id':sql("SELECT organization_id FROM users WHERE id='%s';"%admin['id']),'auth_version':admin['auth_version'],'iat':int(time.time()),'exp':int(time.time())+600}
 php="chdir('/var/www/html');require 'src/Auth/JwtHandler.php';echo (new JwtHandler())->encode(json_decode(base64_decode('"+__import__('base64').b64encode(json.dumps(claims).encode()).decode()+"'),true));"
-token=subprocess.check_output(kub+['exec','reygom-offices-qa','--','php','-r',php],text=True).strip()
-pod=json.loads(subprocess.check_output(kub+['get','pod','reygom-offices-qa','-o','json']))
+token=subprocess.check_output(kub+['exec','reygom-history-qa-r3','--','php','-r',php],text=True).strip()
+pod=json.loads(subprocess.check_output(kub+['get','pod','reygom-history-qa-r3','-o','json']))
 base='http://'+pod['status']['podIP']+':8000'
 counter=0
 def request(method,path,data=None,auth=None,office=None):
@@ -83,7 +83,7 @@ try:
   sql("INSERT INTO property_submissions(id,payload,email,verification_expires_at,status,verified_at,organization_id) VALUES('%s',convert_from(decode('%s','base64'),'UTF8')::jsonb,'qa@example.invalid',now()+interval '1 day','pending_review',now(),'%s');"%(sid,packed,office['id']))
   if office==b:
    code="$d='/var/www/media/submissions-private/"+sid+"';mkdir($d,0700,true);file_put_contents($d.'/verification.json',json_encode(['test_only'=>true,'verification_token'=>'qa-only-token']));"
-   subprocess.run(kub+['exec','reygom-offices-qa','--','php','-r',code],check=True,stdout=subprocess.DEVNULL)
+   subprocess.run(kub+['exec','reygom-history-qa-r3','--','php','-r',code],check=True,stdout=subprocess.DEVNULL)
  inbox=expect('GET','/submissions',auth=aa['token'],label='Office admin reads own submissions')
  check(submission_ids[0] in {r['id'] for r in inbox} and submission_ids[1] not in {r['id'] for r in inbox},'Submission inbox isolated')
  expect('GET','/submissions/'+submission_ids[1]+'/outbox',auth=aa['token'],status=404,label='Foreign private verification file protected')
@@ -108,13 +108,13 @@ try:
 finally:
  # Exact generated UUIDs only. No real data or user credentials are modified.
  def ids(values):return ','.join("'%s'"%str(uuid.UUID(v)) for v in values) or 'NULL'
- cleanup='BEGIN;'
+ cleanup="BEGIN; SET LOCAL reygom.audit_maintenance='on';"
  cleanup+='DELETE FROM property_submissions WHERE id IN ('+ids(submission_ids)+');'
  cleanup+='DELETE FROM property_images WHERE property_id IN ('+ids(property_ids)+');'
  cleanup+='DELETE FROM leads WHERE id IN ('+ids(lead_ids)+');'
  cleanup+='DELETE FROM properties WHERE id IN ('+ids(property_ids)+');'
- cleanup+='DELETE FROM office_audit WHERE organization_id IN ('+ids(office_ids)+');'
  cleanup+='DELETE FROM users WHERE id IN ('+ids(user_ids)+');'
- cleanup+='DELETE FROM organizations WHERE id IN ('+ids(office_ids)+');COMMIT;'
+ cleanup+='DELETE FROM organizations WHERE id IN ('+ids(office_ids)+');'
+ cleanup+='DELETE FROM office_audit WHERE organization_id IN ('+ids(office_ids)+');COMMIT;'
  sql(cleanup)
  print('EXACT_QA_FIXTURES_REMOVED',flush=True)
