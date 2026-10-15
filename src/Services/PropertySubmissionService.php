@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . "/LocationCatalog.php";
 
 final class SubmissionProblem extends RuntimeException {
     public function __construct(string $message, public readonly int $httpStatus = 400) { parent::__construct($message); }
@@ -23,6 +24,7 @@ final class PropertySubmissionService {
             }
             $out[$key] = trim($value);
         }
+        $out=array_merge($out,LocationCatalog::validate($input));
         $out['email'] = strtolower($out['email']);
         if (!filter_var($out['email'], FILTER_VALIDATE_EMAIL)) throw new SubmissionProblem('Correo no válido.');
         $phoneDigits=preg_replace('/\D/','',$out['phone']);
@@ -145,8 +147,8 @@ final class PropertySubmissionService {
             if($row['status']!=='pending_review' || !$row['verified_at']) throw new SubmissionProblem('Solo se pueden revisar anuncios con correo verificado y pendientes.',409);
             $propertyId=null;
             if($decision==='approve') {
-                $d=json_decode($row['payload'],true); $reference=(new PropertyReferenceGenerator($this->db))->generate($d['city'],$d['province'],'ES');
-                $propertyData=array_intersect_key($d,array_flip(['title','description','price','city','province','bedrooms','bathrooms','built_area','operation_type','property_type']));
+                $d=json_decode($row['payload'],true); $reference=(new PropertyReferenceGenerator($this->db))->generate($d['city'],$d['province'],$d['country_code']??'ES');
+                $propertyData=array_intersect_key($d,array_flip(['title','description','price','city','province','bedrooms','bathrooms','built_area','operation_type','property_type','country','country_code','state','state_code','postal_code']));
                 $propertyData['reference_id']=$reference; $propertyData['status']='Disponible';
                 $created=(new Property($this->db))->create($propertyData,$reviewer);
                 if(!$created) throw new RuntimeException('Cannot create property');
