@@ -107,6 +107,7 @@ function handleAuthRoutes(
             return true;
         }
 
+        $identity = TenantAccess::identity($pdo, ['id'=>$userData['id'], 'auth_version'=>$userData['auth_version'] ?? 1], []);
         $issuedAt = time();
         $expiresAt = $issuedAt + 28800;
 
@@ -118,6 +119,7 @@ function handleAuthRoutes(
             'role' => strtolower((string) $userData['role']),
             'organization_id' =>
                 (string) $userData['organization_id'],
+            'auth_version' => (int) ($userData['auth_version'] ?? 1),
             'iat' => $issuedAt,
             'exp' => $expiresAt,
         ]);

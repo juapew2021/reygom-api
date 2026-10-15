@@ -125,6 +125,7 @@ final class PropertySubmissionService {
 
     public function outbox(string $id): array {
         if(self::mode()!=='test') throw new SubmissionProblem('Bandeja de pruebas desactivada.',404);
+        if (!$this->query('SELECT id FROM property_submissions WHERE id=:id',['id'=>$id])->fetchColumn()) throw new SubmissionProblem('Anuncio no encontrado.',404);
         $path=$this->root.'/'.$id.'/verification.json';
         if(!is_file($path)) throw new SubmissionProblem('No hay verificación pendiente.',404);
         return json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR);

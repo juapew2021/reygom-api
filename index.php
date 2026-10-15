@@ -3,7 +3,7 @@
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Office-Id");
 
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     http_response_code(200);
@@ -25,6 +25,8 @@ require_once "src/Config/database.php";
 */
 
 require_once "src/Auth/JwtHandler.php";
+require_once "src/Services/TenantAccess.php";
+require_once "src/Routes/offices.php";
 require_once "src/Middleware/JwtMiddleware.php";
 require_once "src/Helpers/auth.php";
 
@@ -84,6 +86,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleOfficeRoutes($request_uri, $method, $pdo)) { exit(); }
 
 if (handleSubmissionRoutes($request_uri, $method, $pdo)) { exit(); }
 

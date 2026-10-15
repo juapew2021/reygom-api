@@ -48,7 +48,7 @@ $organizationId = (string) $currentUser['organization_id'];
 
     $isAdmin = in_array(
         $userRole,
-        ['admin', 'superadmin'],
+        ['admin', 'superadmin', 'agent', 'agente'],
         true
     );
 
@@ -139,7 +139,7 @@ $organizationId = (string) $currentUser['organization_id'];
         $agentId = $userId;
 
         if (
-            $isAdmin
+            in_array($userRole, ['admin','superadmin'], true)
             && !empty($data->agent_id)
         ) {
             $agentId = trim((string) $data->agent_id);

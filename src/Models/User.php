@@ -38,6 +38,8 @@ final class User
                 password,
                 role,
                 organization_id,
+                is_active,
+                auth_version,
                 created_at
             FROM {$this->tableName}
             WHERE LOWER(username) = LOWER(:username)
@@ -59,6 +61,7 @@ final class User
             return null;
         }
 
+        if (!$user['is_active']) return null;
         unset($user['password']);
 
         return $user;
@@ -80,6 +83,8 @@ final class User
                 username,
                 role,
                 organization_id,
+                is_active,
+                auth_version,
                 created_at
             FROM {$this->tableName}
             WHERE id = :id
@@ -113,6 +118,8 @@ final class User
                 username,
                 role,
                 organization_id,
+                is_active,
+                auth_version,
                 created_at
             FROM {$this->tableName}
             WHERE organization_id = :organization_id
@@ -181,6 +188,8 @@ final class User
                 username,
                 role,
                 organization_id,
+                is_active,
+                auth_version,
                 created_at
         ";
 
@@ -266,6 +275,8 @@ final class User
                 username,
                 role,
                 organization_id,
+                is_active,
+                auth_version,
                 created_at
         ";
 

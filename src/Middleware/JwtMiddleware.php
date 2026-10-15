@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class JwtMiddleware
 {
-    public static function authenticate(): array
+    public static function authenticate(bool $scope = true): array
     {
         $headers = getallheaders();
 
@@ -72,6 +72,9 @@ final class JwtMiddleware
             $payload['username'] = $payload['user'];
         }
 
-        return $payload;
+        global $pdo;
+        $user = TenantAccess::identity($pdo, $payload, $headers);
+        if ($scope) TenantAccess::scope($pdo, $user);
+        return $user;
     }
 }
