@@ -61,6 +61,8 @@ require_once "src/Models/PropertyImage.php";
 |--------------------------------------------------------------------------
 */
 
+require_once "src/Services/NotificationService.php";
+require_once "src/Routes/notifications.php";
 require_once "src/Services/BrandingService.php";
 require_once "src/Routes/branding.php";
 require_once "src/Services/MailService.php";
@@ -104,6 +106,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleNotificationRoutes($request_uri,$method,$pdo)) { exit(); }
 
 if (handleBrandingRoutes($request_uri,$method,$pdo)) { exit(); }
 
