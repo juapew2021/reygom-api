@@ -4,10 +4,9 @@ function handleMailRoutes(string $path,string $method,PDO $pdo):bool{
  if(!str_starts_with($path,'/mail/'))return false;
  header('Cache-Control: no-store');header('X-Content-Type-Options: nosniff');
  $user=JwtMiddleware::authenticate(false);
- if(!in_array($user['role'],['admin','superadmin'],true))TenantAccess::deny(403,'Solo el administrador de oficina puede acceder al correo.');
  TenantAccess::scope($pdo,$user);
  try{
-  $service=new MailService($pdo,$user['organization_id']);
+  $service=MailService::forUser($pdo,$user);
   if($method==='GET'&&$path==='/mail/account')$result=$service->status();
   elseif($method==='GET'&&$path==='/mail/folders')$result=$service->folders();
   elseif($method==='GET'&&$path==='/mail/messages')$result=$service->messages((string)($_GET['folder']??'INBOX'),(int)($_GET['page']??1));
