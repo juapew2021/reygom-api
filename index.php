@@ -78,6 +78,8 @@ require_once "src/Services/PropertyImageService.php";
 |--------------------------------------------------------------------------
 */
 
+require_once "src/Services/PropertyAnalytics.php";
+require_once "src/Routes/analytics.php";
 require_once "src/Routes/auth.php";
 require_once "src/Routes/dashboard.php";
 require_once "src/Routes/leads.php";
@@ -106,6 +108,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleAnalyticsRoutes($request_uri,$method,$pdo)) { exit(); }
 
 if (handleNotificationRoutes($request_uri,$method,$pdo)) { exit(); }
 
