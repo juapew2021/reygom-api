@@ -15,7 +15,7 @@ class Lead {
                     l.contact_info,
                     l.property_interest_id,
                     p.title as property_title,
-                    p.reference_id as property_reference,
+                    p.public_reference as property_reference,
                     l.created_at
                   FROM " . $this->table_name . " l
                   LEFT JOIN properties p ON l.property_interest_id = p.id
@@ -34,7 +34,7 @@ class Lead {
                     l.contact_info,
                     l.property_interest_id,
                     p.title as property_title,
-                    p.reference_id as property_reference,
+                    p.public_reference as property_reference,
                     l.created_at
                   FROM " . $this->table_name . " l
                   LEFT JOIN properties p ON l.property_interest_id = p.id

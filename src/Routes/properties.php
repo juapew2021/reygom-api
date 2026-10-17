@@ -441,6 +441,12 @@ $organizationId = (string) $currentUser['organization_id'];
                 ? strtoupper(trim((string) $data->reference_id))
                 : $existingProperty['reference_id'];
 
+            if ($referenceId !== $existingProperty['reference_id']) {
+                http_response_code(422);
+                echo json_encode(['message'=>'La referencia del inmueble es permanente.']);
+                return true;
+            }
+
             try {
                 $updated = $property->update(
                     $propertyId,

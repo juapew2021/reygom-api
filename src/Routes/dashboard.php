@@ -132,6 +132,7 @@ function handleDashboardRoutes(
         SELECT
             id,
             reference_id,
+                public_reference,
             title,
             price,
             status,

@@ -391,6 +391,7 @@ class Property
             SELECT
                 p.id,
                 p.reference_id,
+                p.public_reference,
                 p.agent_id,
                 p.title,
                 p.description,
