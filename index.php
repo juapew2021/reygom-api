@@ -78,6 +78,8 @@ require_once "src/Services/PropertyImageService.php";
 |--------------------------------------------------------------------------
 */
 
+require_once "src/Services/AgendaService.php";
+require_once "src/Routes/agenda.php";
 require_once "src/Routes/country_location.php";
 require_once "src/Services/PropertyPanoramas.php";
 require_once "src/Routes/panoramas.php";
@@ -111,6 +113,8 @@ $method = $_SERVER["REQUEST_METHOD"];
 | La ruta de medios debe ejecutarse primero porque es pública.
 |--------------------------------------------------------------------------
 */
+
+if (handleAgendaRoutes($request_uri,$method,$pdo)) { exit(); }
 
 if (handleCountryLocation($request_uri,$method)) { exit(); }
 
