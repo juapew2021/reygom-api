@@ -12,7 +12,7 @@ function handlePublicRoutes($request_uri,$method,$pdo){
  elseif(preg_match('#^/public/properties/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$#iD',$request_uri,$m)){$id=$m[1];$request_uri='/public/properties/{id}';}
  if(!in_array($request_uri,['/public/properties','/public/properties/{id}','/public/properties/{reference}'],true))return false;
  if($method!=='GET'){http_response_code(405);echo json_encode(['message'=>'Método no permitido']);return true;}
- $columns='id,reference_id,public_reference,title,description,price,operation_type,property_type,status,cover_image,city,province,bedrooms,bathrooms,built_area,features,created_at';
+ $columns='id,reference_id,public_reference,title,description,price,operation_type,property_type,status,cover_image,country_code,country,state_code,state,postal_code,city,province,bedrooms,bathrooms,built_area,features,created_at';
  if($request_uri==='/public/properties'){$stmt=$pdo->prepare("SELECT $columns FROM properties WHERE status='Disponible' ORDER BY created_at DESC,id DESC");$stmt->execute();echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));return true;}
  if($id!==null){$stmt=$pdo->prepare("SELECT $columns FROM properties WHERE id=:id AND status='Disponible' LIMIT 1");$stmt->execute(['id'=>$id]);}
  else{
