@@ -20,7 +20,7 @@ final class NotificationService{
  public function inbox(int $page,bool $unreadOnly=false):array{
   if($page<1||$page>100000)throw new NotificationProblem('Página no válida.');
   $where='recipient_id=?'.($unreadOnly?' AND read_at IS NULL':'');$total=(int)$this->query('SELECT count(*) FROM internal_notifications WHERE '.$where,[$this->user['id']])->fetchColumn();
-  $rows=$this->query('SELECT id,sender_name,sender_role,title,body,created_at,read_at FROM internal_notifications WHERE '.$where.' ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET '.(($page-1)*25),[$this->user['id']])->fetchAll(PDO::FETCH_ASSOC);
+  $rows=$this->query('SELECT id,sender_name,sender_role,title,body,created_at,read_at,access_request_id FROM internal_notifications WHERE '.$where.' ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET '.(($page-1)*25),[$this->user['id']])->fetchAll(PDO::FETCH_ASSOC);
   return ['rows'=>$rows,'total'=>$total,'unread'=>$this->unread(),'page'=>$page,'pages'=>max(1,(int)ceil($total/25))];
  }
  public function sent(int $page):array{
