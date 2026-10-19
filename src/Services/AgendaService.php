@@ -27,7 +27,7 @@ final class AgendaService {
   if((int)$start->format('Y')<2020||(int)$start->format('Y')>2100)throw new AgendaProblem('Fecha fuera del periodo permitido.');
   $property=$body['property_id']??null;if($property==='')$property=null;
   if($property!==null&&(!is_string($property)||!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iD',$property)))throw new AgendaProblem('Inmueble no válido.');
-  if($kind==='visit'&&$property===null)throw new AgendaProblem('Selecciona el inmueble de la visita.');
+  if($kind==='visit'&&$status==='scheduled'&&$property===null)throw new AgendaProblem('Selecciona el inmueble de la visita.');
   return ['title'=>self::text($body['title']??'',160,true),'kind'=>$kind,'starts_at'=>$start->format(DATE_ATOM),'ends_at'=>$end->format(DATE_ATOM),'timezone'=>$zone,'property_id'=>$property,'location'=>self::text($body['location']??'',300),'notes'=>self::text($body['notes']??'',2000),'status'=>$status];
  }
  public static function context(PDO $pdo,array $user):array {

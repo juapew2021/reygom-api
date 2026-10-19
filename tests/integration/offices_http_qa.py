@@ -59,7 +59,7 @@ try:
   return {'id':row['id'],'username':username,'password':password,'token':login['token']}
  aa=create_user('admina','admin',a['id']);ab=create_user('adminb','admin',b['id'])
  x=create_user('agenta','agent',a['id']);y=create_user('agenta2','agent',a['id']);z=create_user('agentb','agent',b['id'])
- expect('GET','/mail/account',auth=x['token'],status=403,label='Agent cannot read office mailbox')
+ expect('GET','/mail/account',auth=x['token'],status=404,label='Agent without a personal account cannot read office mailbox')
  expect('GET','/mail/account',auth=aa['token'],status=404,label='Other office administrator cannot access ReyGom mailbox')
  expect('GET','/offices',auth=aa['token'],status=403,label='Office admin cannot list all offices')
  expect('POST','/offices',{'name':'Forbidden','slug':prefix+'bad','country_code':'CO'},aa['token'],status=403,label='Office admin cannot create office')
