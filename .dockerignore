@@ -9,3 +9,4 @@
 *.key
 node_modules
 runtime/analytics/dbip-city-lite.mmdb
+release/

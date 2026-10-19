@@ -1,0 +1,24 @@
+{
+  "PROD_modified": false,
+  "outbound_mail_sent": 0,
+  "external_crawler_queries": 0,
+  "result": "PASS",
+  "backup_fully_restored_twice": true,
+  "migrations": 13,
+  "business_counts": {
+    "properties": 5,
+    "property_images": 37,
+    "leads": 0,
+    "users": 1,
+    "organizations": 1
+  },
+  "unassigned_properties_mapped": 4,
+  "legacy_fields_preserved": true,
+  "users_passwords_and_roles_unchanged": true,
+  "recovery_checksums_match": true,
+  "media_files_restored_and_verified": 54,
+  "mail_disabled_in_QA": true,
+  "namespace_has_no_services_or_public_ingress": true,
+  "temporary_namespace_deleted": true,
+  "live_deployment_specs_unchanged": true
+}

@@ -1,0 +1,57 @@
+{
+  "api": {
+    "/public/properties": 200,
+    "/properties": 401,
+    "external_egress_blocked": true
+  },
+  "api_image": "reygom-api:rc-final-20261019",
+  "crm": {
+    "nginx_configuration": "PASS",
+    "homepage": "PASS"
+  },
+  "web": {
+    "nginx_configuration": "PASS",
+    "homepage": "PASS"
+  },
+  "crawler": {
+    "schema": "PASS",
+    "external_searches": 0
+  },
+  "result": "PASS",
+  "pod_states": {
+    "api": [
+      {
+        "name": "api",
+        "ready": true,
+        "reason": null
+      },
+      {
+        "name": "db",
+        "ready": true,
+        "reason": null
+      }
+    ],
+    "crawler": [
+      {
+        "name": "crawler",
+        "ready": true,
+        "reason": null
+      }
+    ],
+    "crm": [
+      {
+        "name": "crm",
+        "ready": true,
+        "reason": null
+      }
+    ],
+    "web": [
+      {
+        "name": "web",
+        "ready": true,
+        "reason": null
+      }
+    ]
+  },
+  "isolated_namespace_removed": true
+}
