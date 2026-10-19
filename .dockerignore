@@ -1,0 +1,11 @@
+.git
+**/.git
+.env
+.env.*
+**/.env
+**/.env.*
+*.dump
+*.pem
+*.key
+node_modules
+runtime/analytics/dbip-city-lite.mmdb
