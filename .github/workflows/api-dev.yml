@@ -1,0 +1,102 @@
+name: Deploy API DEV
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: reygom-api-dev
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxis PHP
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD:/app" \
+            -w /app \
+            php:8.2-cli-alpine \
+            sh -c '
+              set -e
+
+              find index.php src \
+                -type f \
+                -name "*.php" \
+                -print0 |
+              while IFS= read -r -d "" file; do
+                echo "Validando $file"
+                php -l "$file"
+              done
+            '
+
+      - name: Validar construcción Docker
+        shell: bash
+        run: docker build -t reygom-api:ci .
+
+      - name: Probar URLs de fotografías por entorno
+        run: docker run --rm -v "$PWD:/app" -w /app php:8.2-cli-alpine php tests/PropertyImageEnvironmentTest.php
+
+      - name: Configurar acceso SSH
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" \
+            > ~/.ssh/reygom_actions
+
+          chmod 600 ~/.ssh/reygom_actions
+
+          ssh-keyscan \
+            -p "${{ secrets.SSH_PORT }}" \
+            -H "${{ secrets.SSH_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+      - name: Desplegar API en DEV
+        shell: bash
+        run: |
+          ssh \
+            -i ~/.ssh/reygom_actions \
+            -p "${{ secrets.SSH_PORT }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "/opt/reygom/scripts/deploy-api-dev.sh"
+
+      - name: Comprobar API DEV
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            response_file="$(mktemp)"
+
+            status_code="$(
+              curl \
+                --silent \
+                --show-error \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                https://api-dev.reygom.com/
+            )"
+
+            echo "Intento ${attempt}: HTTP ${status_code}"
+            cat "$response_file"
+            echo
+            rm -f "$response_file"
+
+            if [[ "$status_code" == "200" ]]; then
+              echo "API DEV responde HTTP 200."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "La API DEV no respondió correctamente."
+          exit 1

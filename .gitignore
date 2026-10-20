@@ -23,3 +23,11 @@ test-*.png
 
 # Logs
 *.log
+
+# Kubernetes secrets
+k8s/**/*.private.yaml
+
+# Kubernetes secrets privados
+k8s/production/api-secrets.private.yaml
+
+/runtime/analytics/dbip-city-lite.mmdb

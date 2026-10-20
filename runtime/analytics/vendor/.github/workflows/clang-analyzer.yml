@@ -1,0 +1,40 @@
+name: Clang Static Analysis
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '45 3 * * SUN'
+
+permissions: {}
+
+jobs:
+  run:
+    name: "Clang Static Analysis"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: 8.4
+          tools: composer, phpize
+
+      - name: Checkout
+        # We use v1 due to https://github.com/actions/checkout/issues/334
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Install clang-tools and libmaxminddb
+        run: sudo apt update && sudo apt-get install clang-tools libmaxminddb-dev
+
+      - name: Build extension
+        run: |
+              export CFLAGS="-L$HOME/libmaxminddb/lib"
+              export CPPFLAGS="-I$HOME/libmaxminddb/include"
+              cd ext
+              phpize
+              scan-build --status-bugs ./configure --with-maxminddb --enable-maxminddb-debug
+              make clean
+              scan-build --status-bugs make

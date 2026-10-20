@@ -1,18 +1,44 @@
 <?php
 
-function handleDashboardRoutes($request_uri, $method, $pdo)
-{
+declare(strict_types=1);
+
+function handleDashboardRoutes(
+    string $request_uri,
+    string $method,
+    PDO $pdo
+): bool {
     if ($request_uri !== "/dashboard") {
         return false;
     }
-
-    authenticate();
 
     if ($method !== "GET") {
         http_response_code(405);
 
         echo json_encode([
-            "message" => "Método no permitido"
+            "message" => "Método no permitido."
+        ]);
+
+        return true;
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Autenticación
+     |--------------------------------------------------------------------------
+     */
+
+    $currentUser = JwtMiddleware::authenticate();
+
+    $organizationId = $currentUser["organization_id"] ?? null;
+
+    if (
+        !is_string($organizationId) ||
+        trim($organizationId) === ""
+    ) {
+        http_response_code(401);
+
+        echo json_encode([
+            "message" => "El token no contiene una organización válida."
         ]);
 
         return true;
@@ -24,13 +50,29 @@ function handleDashboardRoutes($request_uri, $method, $pdo)
      |--------------------------------------------------------------------------
      */
 
-    $propertiesCount = $pdo
-        ->query("SELECT COUNT(*) FROM properties")
-        ->fetchColumn();
+    $propertiesCountStmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM properties
+        WHERE organization_id = :organization_id
+    ");
 
-    $leadsCount = $pdo
-        ->query("SELECT COUNT(*) FROM leads")
-        ->fetchColumn();
+    $propertiesCountStmt->execute([
+        "organization_id" => $organizationId
+    ]);
+
+    $propertiesCount = $propertiesCountStmt->fetchColumn();
+
+    $leadsCountStmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM leads
+        WHERE organization_id = :organization_id
+    ");
+
+    $leadsCountStmt->execute([
+        "organization_id" => $organizationId
+    ]);
+
+    $leadsCount = $leadsCountStmt->fetchColumn();
 
     /*
      |--------------------------------------------------------------------------
@@ -38,13 +80,19 @@ function handleDashboardRoutes($request_uri, $method, $pdo)
      |--------------------------------------------------------------------------
      */
 
-    $pipelineStmt = $pdo->query("
-        SELECT pipeline_stage,
-               COUNT(*) AS total
+    $pipelineStmt = $pdo->prepare("
+        SELECT
+            pipeline_stage,
+            COUNT(*) AS total
         FROM leads
+        WHERE organization_id = :organization_id
         GROUP BY pipeline_stage
         ORDER BY pipeline_stage
     ");
+
+    $pipelineStmt->execute([
+        "organization_id" => $organizationId
+    ]);
 
     $pipeline = [];
 
@@ -54,39 +102,50 @@ function handleDashboardRoutes($request_uri, $method, $pdo)
 
     /*
      |--------------------------------------------------------------------------
-     | Últimos Leads
+     | Últimos leads
      |--------------------------------------------------------------------------
      */
 
-    $latestLeadsStmt = $pdo->query("
+    $latestLeadsStmt = $pdo->prepare("
         SELECT
             id,
             full_name,
             pipeline_stage,
             created_at
         FROM leads
+        WHERE organization_id = :organization_id
         ORDER BY created_at DESC
         LIMIT 5
     ");
 
+    $latestLeadsStmt->execute([
+        "organization_id" => $organizationId
+    ]);
+
     /*
      |--------------------------------------------------------------------------
-     | Últimos Inmuebles
+     | Últimos inmuebles
      |--------------------------------------------------------------------------
      */
 
-    $latestPropertiesStmt = $pdo->query("
+    $latestPropertiesStmt = $pdo->prepare("
         SELECT
             id,
             reference_id,
+                public_reference,
             title,
             price,
             status,
             created_at
         FROM properties
+        WHERE organization_id = :organization_id
         ORDER BY created_at DESC
         LIMIT 5
     ");
+
+    $latestPropertiesStmt->execute([
+        "organization_id" => $organizationId
+    ]);
 
     /*
      |--------------------------------------------------------------------------
@@ -95,22 +154,31 @@ function handleDashboardRoutes($request_uri, $method, $pdo)
      */
 
     echo json_encode([
-
         "properties_count" => (int) $propertiesCount,
-
         "leads_count" => (int) $leadsCount,
 
-        // Próximos módulos
         "visits_today" => 0,
         "sales_count" => 0,
 
         "pipeline" => $pipeline,
 
-        "latest_leads" => $latestLeadsStmt->fetchAll(PDO::FETCH_ASSOC),
+        "latest_leads" => $latestLeadsStmt->fetchAll(
+            PDO::FETCH_ASSOC
+        ),
 
-        "latest_properties" => $latestPropertiesStmt->fetchAll(PDO::FETCH_ASSOC)
+        "latest_properties" => $latestPropertiesStmt->fetchAll(
+            PDO::FETCH_ASSOC
+        ),
 
-    ]);
+        "authenticated_user" => [
+            "id" => $currentUser["id"] ?? null,
+            "username" => $currentUser["username"]
+                ?? $currentUser["user"]
+                ?? null,
+            "role" => $currentUser["role"] ?? null,
+            "organization_id" => $organizationId
+        ]
+    ], JSON_UNESCAPED_UNICODE);
 
     return true;
 }

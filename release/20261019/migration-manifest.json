@@ -1,0 +1,67 @@
+[
+  {
+    "order": "01-publication.sql",
+    "source": "migrations/20261014_property_submissions.sql",
+    "sha256": "719c2e2e7f44bdaf616153d63bcdc98d06fc7d59067048c60d675d1ec6a129c0"
+  },
+  {
+    "order": "02-offices.sql",
+    "source": "migrations/dev/20261015_offices.sql",
+    "sha256": "f6ff540a980abbda3b52d279007c51f5c06b1146d9be5ee581d94c265833363b"
+  },
+  {
+    "order": "03-history.sql",
+    "source": "migrations/dev/20261015_user_history.sql",
+    "sha256": "832d6c0c3a38d1a539c294c2404836bb7de22385af82e7a3318cd58f8a331434"
+  },
+  {
+    "order": "04-access.sql",
+    "source": "migrations/dev/20261015_device_ip_access.sql",
+    "sha256": "cf5ebfb64f52ee52e5a692ae2eaa178877b5bbc299fa1dd55c85c39a76f70ca3"
+  },
+  {
+    "order": "05-mail.sql",
+    "source": "database/migrations/20261015_mail.sql",
+    "sha256": "88518144880714fbba02a7a89e843f88b8e88a3b08120e5cfc5a6a6f140e17e0"
+  },
+  {
+    "order": "06-branding.sql",
+    "source": "database/migrations/20261016_branding.sql",
+    "sha256": "681ba54231370d3f9581ab9f091f49c0c3666626957785d15e683bf3902366de"
+  },
+  {
+    "order": "07-personal-mail.sql",
+    "source": "database/migrations/20261016_personal_mail.sql",
+    "sha256": "51f61c9559c1129628bda470e470ac5d2db115f2cd35e36481059a3f1013f63b"
+  },
+  {
+    "order": "08-notifications.sql",
+    "source": "database/migrations/20261016_notifications.sql",
+    "sha256": "dc0911b8970e72993c1e0db9ea4806ca945cf410c6eb4dad749961d93f889231"
+  },
+  {
+    "order": "09-references.sql",
+    "source": "database/migrations/20261016_public_references.sql",
+    "sha256": "64a7c9da459b688115e4fdbc7111e32926147725753d26f23e64635b7bca0a13"
+  },
+  {
+    "order": "10-analytics.sql",
+    "source": "database/migrations/20261017_property_visits.sql",
+    "sha256": "6184a0e442dee88b446026363c441e6d55e58536b6bcd92a3b7a226502586f78"
+  },
+  {
+    "order": "11-panoramas.sql",
+    "source": "database/migrations/20261017_panoramas.sql",
+    "sha256": "37e7ded13b6f20ad42e4a5e501085068a5641772d74514856a4a747e8c7b8678"
+  },
+  {
+    "order": "12-agenda.sql",
+    "source": "database/migrations/20261017_agenda.sql",
+    "sha256": "34fb4571d6dbed1e9e75ec6d13ff5ef8859a512658b325a11419d6ca20618feb"
+  },
+  {
+    "order": "13-access-notifications.sql",
+    "source": "database/migrations/20261018_access_notifications.sql",
+    "sha256": "702144ae50a1ed53cc22349fc27ed0f2c69caaab1449fe58a320d900939bae2c"
+  }
+]

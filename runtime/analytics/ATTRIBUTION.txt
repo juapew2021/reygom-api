@@ -1,0 +1,1 @@
+IP Geolocation by DB-IP (https://db-ip.com), October 2026 Lite, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). MaxMind DB Reader PHP v1.14.0, Apache-2.0; see vendor/LICENSE.

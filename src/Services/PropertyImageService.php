@@ -12,7 +12,10 @@ class PropertyImageService
         $this->pdo = $pdo;
         $this->propertyImageModel = new PropertyImage($pdo);
         $this->mediaRoot = "/var/www/media/properties";
-        $this->publicBaseUrl = "https://api.reygom.com/media/properties";
+        $this->publicBaseUrl = rtrim(
+            getenv("MEDIA_PUBLIC_BASE_URL") ?: "https://api.reygom.com/media/properties",
+            "/"
+        );
     }
 
     public function uploadImages(

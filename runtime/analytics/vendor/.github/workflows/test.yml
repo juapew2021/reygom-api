@@ -1,0 +1,71 @@
+name: PHPUnit
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '45 3 * * SUN'
+
+permissions: {}
+
+jobs:
+  run:
+    runs-on: ${{ matrix.runner }}
+    container: shivammathur/node:latest-${{ matrix.arch }}
+    strategy:
+      matrix:
+        arch: ["amd64", "arm64v8"]
+        php-version: ['7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+        php-extension: ['bcmath', 'gmp']
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64v8
+            runner: ubuntu-24.04-arm
+
+    name: "PHP ${{ matrix.php-version }} (with ${{ matrix.php-extension }}) test on ${{ matrix.runner }}"
+    steps:
+      - name: Install PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: "mbstring, intl, ${{ matrix.php-extension }}"
+          tools: "composer, phpize"
+
+      - name: Checkout
+        # We use v1 due to https://github.com/actions/checkout/issues/334
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Install libmaxminddb
+        run: |
+              mkdir -p "$HOME/libmaxminddb"
+              git clone --recursive https://github.com/maxmind/libmaxminddb.git
+              cd libmaxminddb
+              ./bootstrap
+              ./configure --prefix="$HOME/libmaxminddb"
+              make
+              make install
+
+      - name: Build extension
+        run: |
+              export CFLAGS="-L$HOME/libmaxminddb/lib"
+              export CPPFLAGS="-I$HOME/libmaxminddb/include"
+              cd ext
+              phpize
+              ./configure --with-maxminddb --enable-maxminddb-debug
+              make clean
+              make
+              ../dev-bin/run-ext-tests.sh
+              cd ..
+
+      - name: Install dependencies
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Test with phpunit without extension
+        run: vendor/bin/phpunit
+
+      - name: Test with phpunit using extension
+        run: php -d extension=ext/modules/maxminddb.so vendor/bin/phpunit

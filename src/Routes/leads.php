@@ -13,9 +13,18 @@ function handleLeadRoutes($request_uri, $method, $pdo) {
         return false;
     }
 
-    authenticate();
+    // Validar JWT
+    $currentUser = JwtMiddleware::authenticate();
 
     $lead = new Lead($pdo);
+    if ($lead_id && !$lead->readOne($lead_id)) { http_response_code(404); echo json_encode(['message'=>'Lead no encontrado']); return true; }
+    if (in_array($method,['POST','PUT'],true)) {
+        $input=json_decode(file_get_contents('php://input'),true);
+        if (!empty($input['property_interest_id'])) {
+            $check=$pdo->prepare('SELECT id FROM properties WHERE id=?'); $check->execute([$input['property_interest_id']]);
+            if (!$check->fetchColumn()) { http_response_code(422); echo json_encode(['message'=>'El inmueble no pertenece a esta oficina.']); return true; }
+        }
+    }
 
     if ($request_uri === '/leads') {
 

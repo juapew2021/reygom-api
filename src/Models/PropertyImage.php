@@ -61,7 +61,8 @@ class PropertyImage
         bool $isCover = false
     ): array|false {
         try {
-            $this->conn->beginTransaction();
+            $ownsTransaction = !$this->conn->inTransaction();
+        if ($ownsTransaction) { $this->conn->beginTransaction(); }
 
             $countStmt = $this->conn->prepare("
                 SELECT COUNT(*)
@@ -119,11 +120,11 @@ class PropertyImage
                 $this->syncPropertyCover($propertyId, $imageUrl);
             }
 
-            $this->conn->commit();
+            if ($ownsTransaction) { $this->conn->commit(); }
 
             return $created;
         } catch (Throwable $error) {
-            if ($this->conn->inTransaction()) {
+            if ($ownsTransaction && $this->conn->inTransaction()) {
                 $this->conn->rollBack();
             }
 

@@ -2,51 +2,45 @@
 
 declare(strict_types=1);
 
-class User
+namespace App\Models;
+
+use InvalidArgumentException;
+use PDO;
+use RuntimeException;
+
+final class User
 {
     private PDO $conn;
     private string $tableName = 'users';
 
-    private const ALLOWED_ROLES = [
-        'superadmin',
-        'admin',
-        'agent',
-    ];
-
-    private const ALLOWED_STATUSES = [
-        'active',
-        'inactive',
-    ];
-
-    public function __construct(PDO $db)
+    public function __construct(PDO $conn)
     {
-        $this->conn = $db;
+        $this->conn = $conn;
     }
 
     /**
-     * Autentica al usuario y actualiza su último acceso.
+     * Autentica un usuario por username y contraseña.
+     *
+     * @return array<string, mixed>|null
      */
-    public function authenticate(string $username, string $password): array|false
+    public function authenticate(string $username, string $password): ?array
     {
         $username = trim($username);
 
         if ($username === '' || $password === '') {
-            return false;
+            return null;
         }
 
         $query = "
             SELECT
                 id,
                 username,
-                full_name,
-                email,
-                phone,
                 password,
                 role,
-                status,
-                last_login,
-                created_at,
-                updated_at
+                organization_id,
+                is_active,
+                auth_version,
+                created_at
             FROM {$this->tableName}
             WHERE LOWER(username) = LOWER(:username)
             LIMIT 1
@@ -57,394 +51,309 @@ class User
             ':username' => $username,
         ]);
 
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$row) {
-            return false;
+        if (!$user) {
+            return null;
         }
 
-        if (($row['status'] ?? 'inactive') !== 'active') {
-            return false;
+        if (!password_verify($password, (string) $user['password'])) {
+            return null;
         }
 
-        if (!password_verify($password, $row['password'])) {
-            return false;
-        }
+        if (!$user['is_active']) return null;
+        unset($user['password']);
 
-        $this->updateLastLogin((string) $row['id']);
-
-        unset($row['password']);
-
-        $row['last_login'] = date('Y-m-d H:i:s');
-
-        return $row;
+        return $user;
     }
 
     /**
-     * Devuelve todos los usuarios sin exponer contraseñas.
+     * Busca un usuario por ID dentro de una organización.
+     *
+     * @return array<string, mixed>|null
      */
-    public function readAll(): array
-    {
-        $query = "
-            SELECT
-                id,
-                username,
-                full_name,
-                email,
-                phone,
-                role,
-                status,
-                last_login,
-                created_at,
-                updated_at
-            FROM {$this->tableName}
-            ORDER BY created_at DESC
-        ";
-
-        $stmt = $this->conn->query($query);
-
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    /**
-     * Busca un usuario por UUID.
-     */
-    public function readOne(string $id): array|false
+    public function findById(string $id, string $organizationId): ?array
     {
         $this->validateUuid($id);
+        $this->validateUuid($organizationId);
 
         $query = "
             SELECT
                 id,
                 username,
-                full_name,
-                email,
-                phone,
                 role,
-                status,
-                last_login,
-                created_at,
-                updated_at
+                organization_id,
+                is_active,
+                auth_version,
+                created_at
             FROM {$this->tableName}
             WHERE id = :id
+              AND organization_id = :organization_id
             LIMIT 1
         ";
 
         $stmt = $this->conn->prepare($query);
         $stmt->execute([
             ':id' => $id,
+            ':organization_id' => $organizationId,
         ]);
 
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $user ?: null;
     }
 
     /**
-     * Compatibilidad con el método utilizado anteriormente.
+     * Lista usuarios de una organización.
+     *
+     * @return array<int, array<string, mixed>>
      */
-    public function findById(string $id): array|false
+    public function findAll(string $organizationId): array
     {
-        return $this->readOne($id);
+        $this->validateUuid($organizationId);
+
+        $query = "
+            SELECT
+                id,
+                username,
+                role,
+                organization_id,
+                is_active,
+                auth_version,
+                created_at
+            FROM {$this->tableName}
+            WHERE organization_id = :organization_id
+            ORDER BY created_at DESC
+        ";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([
+            ':organization_id' => $organizationId,
+        ]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
      * Crea un usuario.
+     *
+     * @return array<string, mixed>
      */
-    public function create(array $data): array
-    {
-        $payload = $this->validateCreatePayload($data);
+    public function create(
+        string $username,
+        string $password,
+        string $role,
+        string $organizationId
+    ): array {
+        $username = trim($username);
 
-        if ($this->usernameExists($payload['username'])) {
-            throw new RuntimeException('El nombre de usuario ya está registrado.');
+        if ($username === '') {
+            throw new InvalidArgumentException('El username es obligatorio.');
         }
 
-        if ($this->emailExists($payload['email'])) {
-            throw new RuntimeException('El correo electrónico ya está registrado.');
+        if (mb_strlen($username) < 3 || mb_strlen($username) > 50) {
+            throw new InvalidArgumentException(
+                'El username debe tener entre 3 y 50 caracteres.'
+            );
+        }
+
+        if (mb_strlen($password) < 8) {
+            throw new InvalidArgumentException(
+                'La contraseña debe tener al menos 8 caracteres.'
+            );
+        }
+
+        $this->validateRole($role);
+        $this->validateUuid($organizationId);
+
+        if ($this->existsByUsername($username)) {
+            throw new RuntimeException('El username ya está registrado.');
         }
 
         $query = "
             INSERT INTO {$this->tableName} (
                 username,
-                full_name,
-                email,
-                phone,
                 password,
                 role,
-                status
+                organization_id
             )
             VALUES (
                 :username,
-                :full_name,
-                :email,
-                :phone,
                 :password,
                 :role,
-                :status
+                :organization_id
             )
             RETURNING
                 id,
                 username,
-                full_name,
-                email,
-                phone,
                 role,
-                status,
-                last_login,
-                created_at,
-                updated_at
+                organization_id,
+                is_active,
+                auth_version,
+                created_at
         ";
 
         $stmt = $this->conn->prepare($query);
-
         $stmt->execute([
-            ':username'  => $payload['username'],
-            ':full_name' => $payload['full_name'],
-            ':email'     => $payload['email'],
-            ':phone'     => $payload['phone'],
-            ':password'  => password_hash(
-                $payload['password'],
-                PASSWORD_DEFAULT
-            ),
-            ':role'      => $payload['role'],
-            ':status'    => $payload['status'],
+            ':username' => $username,
+            ':password' => password_hash($password, PASSWORD_DEFAULT),
+            ':role' => $role,
+            ':organization_id' => $organizationId,
         ]);
 
-        $createdUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$createdUser) {
-            throw new RuntimeException('No fue posible crear el usuario.');
+        if (!$user) {
+            throw new RuntimeException('No se pudo crear el usuario.');
         }
 
-        return $createdUser;
+        return $user;
     }
 
     /**
-     * Actualiza los datos generales de un usuario.
+     * Actualiza username o role.
+     *
+     * @return array<string, mixed>
      */
-    public function update(string $id, array $data): array
-    {
+    public function update(
+        string $id,
+        string $organizationId,
+        ?string $username = null,
+        ?string $role = null
+    ): array {
         $this->validateUuid($id);
+        $this->validateUuid($organizationId);
 
-        if (!$this->exists($id)) {
-            throw new RuntimeException('Usuario no encontrado.');
+        $fields = [];
+        $params = [
+            ':id' => $id,
+            ':organization_id' => $organizationId,
+        ];
+
+        if ($username !== null) {
+            $username = trim($username);
+
+            if ($username === '') {
+                throw new InvalidArgumentException(
+                    'El username no puede estar vacío.'
+                );
+            }
+
+            if (mb_strlen($username) < 3 || mb_strlen($username) > 50) {
+                throw new InvalidArgumentException(
+                    'El username debe tener entre 3 y 50 caracteres.'
+                );
+            }
+
+            if ($this->existsByUsername($username, $id)) {
+                throw new RuntimeException('El username ya está registrado.');
+            }
+
+            $fields[] = 'username = :username';
+            $params[':username'] = $username;
         }
 
-        $payload = $this->validateUpdatePayload($data);
-
-        if (
-            isset($payload['username'])
-            && $this->usernameExists($payload['username'], $id)
-        ) {
-            throw new RuntimeException('El nombre de usuario ya está registrado.');
+        if ($role !== null) {
+            $this->validateRole($role);
+            $fields[] = 'role = :role';
+            $params[':role'] = $role;
         }
 
-        if (
-            isset($payload['email'])
-            && $this->emailExists($payload['email'], $id)
-        ) {
-            throw new RuntimeException('El correo electrónico ya está registrado.');
-        }
-
-        if ($payload === []) {
+        if ($fields === []) {
             throw new InvalidArgumentException(
-                'No se proporcionaron campos válidos para actualizar.'
+                'No se proporcionaron campos para actualizar.'
             );
         }
 
-        $setParts = [];
-        $params = [':id' => $id];
-
-        foreach ($payload as $field => $value) {
-            $placeholder = ':' . $field;
-            $setParts[] = "{$field} = {$placeholder}";
-            $params[$placeholder] = $value;
-        }
-
-        $setParts[] = 'updated_at = CURRENT_TIMESTAMP';
-
         $query = "
             UPDATE {$this->tableName}
-            SET " . implode(', ', $setParts) . "
+            SET " . implode(', ', $fields) . "
             WHERE id = :id
+              AND organization_id = :organization_id
             RETURNING
                 id,
                 username,
-                full_name,
-                email,
-                phone,
                 role,
-                status,
-                last_login,
-                created_at,
-                updated_at
+                organization_id,
+                is_active,
+                auth_version,
+                created_at
         ";
 
         $stmt = $this->conn->prepare($query);
         $stmt->execute($params);
 
-        $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$updatedUser) {
-            throw new RuntimeException('No fue posible actualizar el usuario.');
-        }
-
-        return $updatedUser;
-    }
-
-    /**
-     * Cambia la contraseña de un usuario.
-     */
-    public function changePassword(string $id, string $password): bool
-    {
-        $this->validateUuid($id);
-        $this->validatePassword($password);
-
-        if (!$this->exists($id)) {
-            throw new RuntimeException('Usuario no encontrado.');
-        }
-
-        $query = "
-            UPDATE {$this->tableName}
-            SET
-                password = :password,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        ";
-
-        $stmt = $this->conn->prepare($query);
-
-        return $stmt->execute([
-            ':password' => password_hash($password, PASSWORD_DEFAULT),
-            ':id'       => $id,
-        ]);
-    }
-
-    /**
-     * Activa o desactiva un usuario.
-     */
-    public function changeStatus(string $id, string $status): array
-    {
-        $this->validateUuid($id);
-        $status = $this->validateStatus($status);
-
-        if (!$this->exists($id)) {
-            throw new RuntimeException('Usuario no encontrado.');
-        }
-
-        $query = "
-            UPDATE {$this->tableName}
-            SET
-                status = :status,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-            RETURNING
-                id,
-                username,
-                full_name,
-                email,
-                phone,
-                role,
-                status,
-                last_login,
-                created_at,
-                updated_at
-        ";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute([
-            ':status' => $status,
-            ':id'     => $id,
-        ]);
-
-        $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$updatedUser) {
-            throw new RuntimeException(
-                'No fue posible cambiar el estado del usuario.'
-            );
-        }
-
-        return $updatedUser;
-    }
-
-    /**
-     * Cambia solamente el rol.
-     */
-    public function changeRole(string $id, string $role): array
-    {
-        $this->validateUuid($id);
-        $role = $this->validateRole($role);
-
-        return $this->update($id, [
-            'role' => $role,
-        ]);
-    }
-
-    /**
-     * Elimina un usuario.
-     *
-     * Antes de eliminar se comprueba si tiene inmuebles o clientes asignados.
-     */
-    public function delete(string $id): bool
-    {
-        $this->validateUuid($id);
-
-        $user = $this->readOne($id);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
             throw new RuntimeException('Usuario no encontrado.');
         }
 
-        if ($user['role'] === 'superadmin') {
-            throw new RuntimeException(
-                'No se puede eliminar directamente un usuario superadmin.'
+        return $user;
+    }
+
+    public function updatePassword(
+        string $id,
+        string $organizationId,
+        string $newPassword
+    ): bool {
+        $this->validateUuid($id);
+        $this->validateUuid($organizationId);
+
+        if (mb_strlen($newPassword) < 8) {
+            throw new InvalidArgumentException(
+                'La contraseña debe tener al menos 8 caracteres.'
             );
         }
 
-        if ($this->hasAssignedRecords($id)) {
+        $query = "
+            UPDATE {$this->tableName}
+            SET password = :password
+            WHERE id = :id
+              AND organization_id = :organization_id
+        ";
+
+        $stmt = $this->conn->prepare($query);
+
+        $stmt->execute([
+            ':password' => password_hash($newPassword, PASSWORD_DEFAULT),
+            ':id' => $id,
+            ':organization_id' => $organizationId,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    public function delete(string $id, string $organizationId): bool
+    {
+        $this->validateUuid($id);
+        $this->validateUuid($organizationId);
+
+        if ($this->hasDependencies($id)) {
             throw new RuntimeException(
-                'El usuario tiene inmuebles o clientes asignados. '
-                . 'Debe reasignarlos antes de eliminarlo.'
+                'El usuario tiene propiedades o leads asociados y no puede eliminarse.'
             );
         }
 
         $query = "
             DELETE FROM {$this->tableName}
             WHERE id = :id
+              AND organization_id = :organization_id
         ";
 
         $stmt = $this->conn->prepare($query);
         $stmt->execute([
             ':id' => $id,
+            ':organization_id' => $organizationId,
         ]);
 
         return $stmt->rowCount() > 0;
     }
 
-    public function exists(string $id): bool
-    {
-        $this->validateUuid($id);
-
-        $query = "
-            SELECT 1
-            FROM {$this->tableName}
-            WHERE id = :id
-            LIMIT 1
-        ";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute([
-            ':id' => $id,
-        ]);
-
-        return (bool) $stmt->fetchColumn();
-    }
-
-    public function usernameExists(
+    public function existsByUsername(
         string $username,
         ?string $excludeId = null
     ): bool {
-        $username = trim($username);
-
         $query = "
             SELECT 1
             FROM {$this->tableName}
@@ -452,7 +361,7 @@ class User
         ";
 
         $params = [
-            ':username' => $username,
+            ':username' => trim($username),
         ];
 
         if ($excludeId !== null) {
@@ -469,85 +378,7 @@ class User
         return (bool) $stmt->fetchColumn();
     }
 
-    public function emailExists(
-        string $email,
-        ?string $excludeId = null
-    ): bool {
-        $email = strtolower(trim($email));
-
-        $query = "
-            SELECT 1
-            FROM {$this->tableName}
-            WHERE LOWER(email) = LOWER(:email)
-        ";
-
-        $params = [
-            ':email' => $email,
-        ];
-
-        if ($excludeId !== null) {
-            $this->validateUuid($excludeId);
-            $query .= ' AND id <> :exclude_id';
-            $params[':exclude_id'] = $excludeId;
-        }
-
-        $query .= ' LIMIT 1';
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute($params);
-
-        return (bool) $stmt->fetchColumn();
-    }
-
-    /**
-     * Conservamos initDatabase para instalaciones nuevas.
-     */
-    public function initDatabase(): string
-    {
-        $query = "
-            CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";
-
-            CREATE TABLE IF NOT EXISTS {$this->tableName} (
-                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                username VARCHAR(50) UNIQUE NOT NULL,
-                full_name VARCHAR(120) NOT NULL,
-                email VARCHAR(160) UNIQUE NOT NULL,
-                phone VARCHAR(30),
-                password VARCHAR(255) NOT NULL,
-                role VARCHAR(20) NOT NULL DEFAULT 'agent',
-                status VARCHAR(20) NOT NULL DEFAULT 'active',
-                last_login TIMESTAMP NULL,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT users_role_check
-                    CHECK (role IN ('superadmin', 'admin', 'agent')),
-                CONSTRAINT users_status_check
-                    CHECK (status IN ('active', 'inactive'))
-            )
-        ";
-
-        $this->conn->exec($query);
-
-        return 'Tabla de usuarios verificada correctamente.';
-    }
-
-    private function updateLastLogin(string $id): void
-    {
-        $query = "
-            UPDATE {$this->tableName}
-            SET
-                last_login = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        ";
-
-        $stmt = $this->conn->prepare($query);
-        $stmt->execute([
-            ':id' => $id,
-        ]);
-    }
-
-    private function hasAssignedRecords(string $id): bool
+    private function hasDependencies(string $id): bool
     {
         $query = "
             SELECT EXISTS (
@@ -565,223 +396,37 @@ class User
         $stmt = $this->conn->prepare($query);
         $stmt->execute([
             ':property_user_id' => $id,
-            ':lead_user_id'     => $id,
+            ':lead_user_id' => $id,
         ]);
 
         return (bool) $stmt->fetchColumn();
     }
 
-    private function validateCreatePayload(array $data): array
+    private function validateRole(string $role): void
     {
-        $username = trim((string) ($data['username'] ?? ''));
-        $fullName = trim((string) ($data['full_name'] ?? ''));
-        $email = strtolower(trim((string) ($data['email'] ?? '')));
-        $phone = $this->normalizeNullableString($data['phone'] ?? null);
-        $password = (string) ($data['password'] ?? '');
-        $role = $this->validateRole(
-            (string) ($data['role'] ?? 'agent')
-        );
-        $status = $this->validateStatus(
-            (string) ($data['status'] ?? 'active')
-        );
-
-        $this->validateUsername($username);
-        $this->validateFullName($fullName);
-        $this->validateEmail($email);
-        $this->validatePhone($phone);
-        $this->validatePassword($password);
-
-        return [
-            'username'  => $username,
-            'full_name' => $fullName,
-            'email'     => $email,
-            'phone'     => $phone,
-            'password'  => $password,
-            'role'      => $role,
-            'status'    => $status,
+        $allowedRoles = [
+            'superadmin',
+            'admin',
+            'agent',
+            'agente',
         ];
-    }
 
-    private function validateUpdatePayload(array $data): array
-    {
-        $payload = [];
-
-        if (array_key_exists('username', $data)) {
-            $username = trim((string) $data['username']);
-            $this->validateUsername($username);
-            $payload['username'] = $username;
-        }
-
-        if (array_key_exists('full_name', $data)) {
-            $fullName = trim((string) $data['full_name']);
-            $this->validateFullName($fullName);
-            $payload['full_name'] = $fullName;
-        }
-
-        if (array_key_exists('email', $data)) {
-            $email = strtolower(trim((string) $data['email']));
-            $this->validateEmail($email);
-            $payload['email'] = $email;
-        }
-
-        if (array_key_exists('phone', $data)) {
-            $phone = $this->normalizeNullableString($data['phone']);
-            $this->validatePhone($phone);
-            $payload['phone'] = $phone;
-        }
-
-        if (array_key_exists('role', $data)) {
-            $payload['role'] = $this->validateRole(
-                (string) $data['role']
-            );
-        }
-
-        if (array_key_exists('status', $data)) {
-            $payload['status'] = $this->validateStatus(
-                (string) $data['status']
-            );
-        }
-
-        return $payload;
-    }
-
-    private function validateUsername(string $username): void
-    {
-        if ($username === '') {
+        if (!in_array($role, $allowedRoles, true)) {
             throw new InvalidArgumentException(
-                'El nombre de usuario es obligatorio.'
-            );
-        }
-
-        if (strlen($username) < 3 || strlen($username) > 50) {
-            throw new InvalidArgumentException(
-                'El usuario debe tener entre 3 y 50 caracteres.'
-            );
-        }
-
-        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $username)) {
-            throw new InvalidArgumentException(
-                'El usuario solo puede contener letras, números, puntos, '
-                . 'guiones y guiones bajos.'
+                'El rol indicado no es válido.'
             );
         }
     }
 
-    private function validateFullName(string $fullName): void
-    {
-        if ($fullName === '') {
-            throw new InvalidArgumentException(
-                'El nombre completo es obligatorio.'
-            );
-        }
-
-        if (strlen($fullName) > 120) {
-            throw new InvalidArgumentException(
-                'El nombre completo no puede superar 120 caracteres.'
-            );
-        }
-    }
-
-    private function validateEmail(string $email): void
-    {
-        if ($email === '') {
-            throw new InvalidArgumentException(
-                'El correo electrónico es obligatorio.'
-            );
-        }
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new InvalidArgumentException(
-                'El correo electrónico no es válido.'
-            );
-        }
-
-        if (strlen($email) > 160) {
-            throw new InvalidArgumentException(
-                'El correo electrónico no puede superar 160 caracteres.'
-            );
-        }
-    }
-
-    private function validatePhone(?string $phone): void
-    {
-        if ($phone === null) {
-            return;
-        }
-
-        if (strlen($phone) > 30) {
-            throw new InvalidArgumentException(
-                'El teléfono no puede superar 30 caracteres.'
-            );
-        }
-    }
-
-    private function validatePassword(string $password): void
-    {
-        if (strlen($password) < 8) {
-            throw new InvalidArgumentException(
-                'La contraseña debe contener al menos 8 caracteres.'
-            );
-        }
-
-        if (strlen($password) > 255) {
-            throw new InvalidArgumentException(
-                'La contraseña es demasiado larga.'
-            );
-        }
-    }
-
-    private function validateRole(string $role): string
-    {
-        $role = strtolower(trim($role));
-
-        if (!in_array($role, self::ALLOWED_ROLES, true)) {
-            throw new InvalidArgumentException(
-                'Rol no permitido. Valores válidos: '
-                . implode(', ', self::ALLOWED_ROLES) . '.'
-            );
-        }
-
-        return $role;
-    }
-
-    private function validateStatus(string $status): string
-    {
-        $status = strtolower(trim($status));
-
-        if (!in_array($status, self::ALLOWED_STATUSES, true)) {
-            throw new InvalidArgumentException(
-                'Estado no permitido. Valores válidos: '
-                . implode(', ', self::ALLOWED_STATUSES) . '.'
-            );
-        }
-
-        return $status;
-    }
-
-    private function validateUuid(string $id): void
+    private function validateUuid(string $value): void
     {
         if (
             !preg_match(
-                '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
-                . '[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
-                $id
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+                $value
             )
         ) {
-            throw new InvalidArgumentException(
-                'El identificador del usuario no es un UUID válido.'
-            );
+            throw new InvalidArgumentException('El identificador no es válido.');
         }
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $normalized = trim((string) $value);
-
-        return $normalized === '' ? null : $normalized;
     }
 }

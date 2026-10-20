@@ -39,27 +39,16 @@ function handlePropertyRoutes(
      |--------------------------------------------------------------------------
      */
 
-    $currentUser = authenticate();
+   // Validar JWT
+$currentUser = JwtMiddleware::authenticate();
 
-    if (
-        empty($currentUser->id)
-        || empty($currentUser->role)
-    ) {
-        http_response_code(401);
-
-        echo json_encode([
-            'message' => 'El token no contiene la información del usuario.',
-        ]);
-
-        return true;
-    }
-
-    $userId = (string) $currentUser->id;
-    $userRole = strtolower((string) $currentUser->role);
+$userId = (string) $currentUser['id'];
+$userRole = strtolower((string) $currentUser['role']);
+$organizationId = (string) $currentUser['organization_id'];
 
     $isAdmin = in_array(
         $userRole,
-        ['admin', 'superadmin'],
+        ['admin', 'superadmin', 'agent', 'agente'],
         true
     );
 
@@ -150,7 +139,7 @@ function handlePropertyRoutes(
         $agentId = $userId;
 
         if (
-            $isAdmin
+            in_array($userRole, ['admin','superadmin'], true)
             && !empty($data->agent_id)
         ) {
             $agentId = trim((string) $data->agent_id);
@@ -451,6 +440,12 @@ function handlePropertyRoutes(
             $referenceId = !empty($data->reference_id)
                 ? strtoupper(trim((string) $data->reference_id))
                 : $existingProperty['reference_id'];
+
+            if ($referenceId !== $existingProperty['reference_id']) {
+                http_response_code(422);
+                echo json_encode(['message'=>'La referencia del inmueble es permanente.']);
+                return true;
+            }
 
             try {
                 $updated = $property->update(

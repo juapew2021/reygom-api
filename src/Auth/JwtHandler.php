@@ -48,7 +48,7 @@ class JwtHandler
             . $this->base64UrlEncode($signature);
     }
 
-    public function decode(string $jwt): object|false
+    public function decode(string $jwt): array|false
     {
         $tokenParts = explode('.', $jwt);
 
@@ -71,13 +71,14 @@ class JwtHandler
             return false;
         }
 
-        $payload = json_decode(
-            $this->base64UrlDecode($base64UrlPayload)
-        );
+      $payload = json_decode(
+    $this->base64UrlDecode($base64UrlPayload),
+    true
+);
 
-        if (!is_object($payload)) {
-            return false;
-        }
+if (!is_array($payload)) {
+    return false;
+}
 
         $expectedSignature = $this->base64UrlEncode(
             hash_hmac(
@@ -90,7 +91,14 @@ class JwtHandler
 
         if (!hash_equals($expectedSignature, $providedSignature)) {
             return false;
-        }
+        };
+        if (
+    !isset($payload['exp']) ||
+    !is_numeric($payload['exp']) ||
+    (int)$payload['exp'] < time()
+) {
+    return false;
+}
 
         return $payload;
     }
