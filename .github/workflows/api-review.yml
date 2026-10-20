@@ -1,0 +1,30 @@
+name: Validate API review
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the API without deployment credentials
+        run: docker build -t reygom-api:review .
+      - name: Check PHP syntax
+        run: |
+          docker run --rm --network none reygom-api:review sh -eu -c '
+            find index.php src tests -type f -name "*.php" -print |
+            while IFS= read -r file; do php -l "$file"; done
+          '
+      - name: Test public galleries and office visibility
+        run: docker run --rm --network none reygom-api:review php tests/PublicCatalogRegressionTest.php
+      - name: Test image URLs by environment
+        run: docker run --rm --network none reygom-api:review php tests/PropertyImageEnvironmentTest.php
